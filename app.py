@@ -158,3 +158,13 @@ with tab_robust:
     )
     st.warning("Ranks 6-10 are within statistical noise of 11-15. The firm names are Abhishek Sharma, Suryakumar Yadav, Heinrich Klaasen (batters) and Sunil Narine, Varun Chakravarthy (bowlers).")
 
+# ---------------------------------------------------------------- RR fit
+with tab_rr:
+    st.subheader("Where RR is weak under pressure (2025-26)")
+    gaps = pd.DataFrame({"Powerplay": [70, -12], "Overs 7-15": [12, -11], "Death": [-5, -6]}, index=["Batting", "Bowling"])
+    fig = go.Figure()
+    for col, color in zip(gaps.columns, [PINK, BLUE, NAVY]):
+        fig.add_bar(name=col, x=gaps.index, y=gaps[col], marker_color=color)
+    fig.update_layout(barmode="group", height=380, yaxis_title="Runs vs par per 100 pressure balls", plot_bgcolor="white")
+    st.plotly_chart(fig, width="stretch")
+    st.caption("About 100 overs per side, so directional. Source: methodology report, Section 7.")
