@@ -152,3 +152,9 @@ with tab_robust:
     fig.update_layout(height=560, xaxis_title="Pooled rank (IPL + T20I)", yaxis_title="IPL-only rank",
                       xaxis=dict(range=[0, 26]), yaxis=dict(range=[0, 40], autorange="reversed"), plot_bgcolor="white")
     st.plotly_chart(fig, width="stretch")
+    st.markdown(
+        "**Stress tests (top 10 still top 10):** LI ≥ 1.25: 8/7 · LI ≥ 2.0: 10/9 · IPL balls only: 6/6 · "
+        "recency-weighted: 7/8 · weaker shrinkage: 9/8 · stronger shrinkage: 9/9 (batters/bowlers)."
+    )
+    st.warning("Ranks 6-10 are within statistical noise of 11-15. The firm names are Abhishek Sharma, Suryakumar Yadav, Heinrich Klaasen (batters) and Sunil Narine, Varun Chakravarthy (bowlers).")
+
