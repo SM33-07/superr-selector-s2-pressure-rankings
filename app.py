@@ -1,5 +1,9 @@
 """SupeRR Selector S2 - Round 1: Most reliable players under pressure.
 Interactive companion to the methodology report (RR, IPL 2027 auction)."""
+from pathlib import Path
+import pandas as pd
+
+DATA = Path(__file__).parent / "data"
 import streamlit as st
 
 PINK, NAVY, BLUE = "#EA1B85", "#0B1033", "#254AA5"
@@ -15,6 +19,13 @@ st.markdown(
 )
 
 
+@st.cache_data
+def load(kind: str) -> pd.DataFrame:
+    df = pd.read_csv(DATA / f"{kind}.csv")
+    df["team"] = df["ipl26"].fillna("-").replace({"-": "No 2026 squad"})
+    df["cons_pct"] = df["cons"] * 100
+    df["top10_pct"] = df["p_top10_rating"] * 100
+    return df
 st.title("Who holds up when it matters?")
 st.caption("SupeRR Selector Season 2 · Round 1 · Most reliable players under pressure for Rajasthan Royals · IPL 2027 auction")
 
