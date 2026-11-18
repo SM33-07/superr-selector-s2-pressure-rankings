@@ -102,3 +102,16 @@ with tab_player:
     m2.metric("90% interval", f"{p['boot_lo']:.0f} to {p['boot_hi']:.0f}")
     m3.metric("Consistency", f"{p['cons_pct']:.0f}%")
     m4.metric("P(top-10)", f"{p['top10_pct']:.0f}%")
+    a, b = st.columns(2)
+    with a:
+        fig = go.Figure(go.Pie(labels=["IPL", "T20I"], values=[p["p_ipl"], p["p_t20i"]], hole=0.55,
+                               marker=dict(colors=[PINK, BLUE])))
+        fig.update_layout(title="Where the pressure balls come from", height=320, margin=dict(t=50, b=10))
+        st.plotly_chart(fig, width="stretch")
+    with b:
+        lab = ["Strike rate" if role2 == "Batters" else "Economy", "Dismissals/100" if role2 == "Batters" else "Wickets/100"]
+        fig = go.Figure()
+        fig.add_bar(name="Player", x=lab, y=[p["sr_act"], p["out_act"]], marker_color=PINK)
+        fig.add_bar(name="Situation par", x=lab, y=[p["sr_par"], p["out_par"]], marker_color=NAVY)
+        fig.update_layout(barmode="group", title="Actual vs situation-par (own pressure balls)", height=320, margin=dict(t=50, b=10))
+        st.plotly_chart(fig, width="stretch")
