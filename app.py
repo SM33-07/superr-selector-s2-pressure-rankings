@@ -29,3 +29,9 @@ def load(kind: str) -> pd.DataFrame:
 st.title("Who holds up when it matters?")
 st.caption("SupeRR Selector Season 2 · Round 1 · Most reliable players under pressure for Rajasthan Royals · IPL 2027 auction")
 
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Deliveries analysed", "189,555")
+c2.metric("Matches (IPL + T20I, 2022-26)", "803")
+c3.metric("High-pressure balls", "18%")
+c4.metric("Split-half reliability (level)", "r = 0.42 / 0.39")
+
