@@ -4,6 +4,7 @@ from pathlib import Path
 import pandas as pd
 
 DATA = Path(__file__).parent / "data"
+import plotly.graph_objects as go
 import streamlit as st
 
 PINK, NAVY, BLUE = "#EA1B85", "#0B1033", "#254AA5"
@@ -61,4 +62,22 @@ with tab_rank:
     else:
         view = view.sort_values("recent_rank")
     view = view.head(top_n).reset_index(drop=True)
+
+    plot = view.iloc[::-1]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=plot["pressure"], y=plot["name"], mode="markers", name="Pressure rating",
+        marker=dict(color=PINK, size=13),
+        error_x=dict(type="data", symmetric=False,
+                     array=plot["boot_hi"] - plot["pressure"], arrayminus=plot["pressure"] - plot["boot_lo"],
+                     color="#9aa3bd", thickness=3),
+        customdata=plot[["team", "p_balls", "cons_pct", "boot_lo", "boot_hi"]],
+        hovertemplate="<b>%{y}</b> (%{customdata[0]})<br>Rating %{x:.1f}<br>90%% interval %{customdata[3]:.0f} to %{customdata[4]:.0f}<br>Pressure balls %{customdata[1]}<br>Consistency %{customdata[2]:.0f}%%<extra></extra>"))
+    fig.add_trace(go.Scatter(x=plot["baseline"], y=plot["name"], mode="markers", name="Baseline (all situations)",
+                             marker=dict(color="rgba(0,0,0,0)", size=11, line=dict(color=NAVY, width=2))))
+    fig.update_layout(height=max(380, 46 * len(plot) + 120), margin=dict(l=10, r=10, t=30, b=10),
+                      xaxis_title="Runs above situation-par per 100 high-pressure balls",
+                      legend=dict(orientation="h", y=1.08), plot_bgcolor="white")
+    st.plotly_chart(fig, width="stretch")
+    st.caption("Filled dot = pressure rating. Hollow dot = baseline from all situations. Bar = 90% bootstrap interval.")
 
