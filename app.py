@@ -168,3 +168,14 @@ with tab_rr:
     fig.update_layout(barmode="group", height=380, yaxis_title="Runs vs par per 100 pressure balls", plot_bgcolor="white")
     st.plotly_chart(fig, width="stretch")
     st.caption("About 100 overs per side, so directional. Source: methodology report, Section 7.")
+    cb, cw = st.columns(2)
+    with cb:
+        st.markdown("**Batting targets**")
+        for k, v in FIT["batters"].items():
+            st.markdown(f"- **{k}**: {v}")
+    with cw:
+        st.markdown("**Bowling targets**")
+        for k, v in FIT["bowlers"].items():
+            st.markdown(f"- **{k}**: {v}")
+    st.info("Availability is unconfirmed: retention lists were due 17 Nov 2026 and the mini-auction is on 16 Dec 2026 in Goa.")
+
