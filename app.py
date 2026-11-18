@@ -81,3 +81,13 @@ with tab_rank:
     st.plotly_chart(fig, width="stretch")
     st.caption("Filled dot = pressure rating. Hollow dot = baseline from all situations. Bar = 90% bootstrap interval.")
 
+    is_bat = role == "Batters"
+    out = view[["rank", "name", "team", "pressure", "boot_lo", "boot_hi", "cons_pct", "p_ipl", "p_t20i",
+                "sr_act", "sr_par", "out_act", "out_par", "ipl_only_rank", "top10_pct"]].copy()
+    out.columns = ["Rank", "Player", "IPL 2026", "Rating", "Lo (5%)", "Hi (95%)", "Consistency %", "IPL balls", "T20I balls",
+                   "SR actual" if is_bat else "Econ actual", "SR par" if is_bat else "Econ par",
+                   "Outs/100" if is_bat else "Wkts/100", "Outs/100 par" if is_bat else "Wkts/100 par",
+                   "IPL-only rank", "P(top-10) %"]
+    st.dataframe(out.round(1), hide_index=True, width="stretch")
+    st.download_button("Download table (CSV)", out.to_csv(index=False), f"{role.lower()}_view.csv", "text/csv")
+
