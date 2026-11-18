@@ -35,3 +35,7 @@ c2.metric("Matches (IPL + T20I, 2022-26)", "803")
 c3.metric("High-pressure balls", "18%")
 c4.metric("Split-half reliability (level)", "r = 0.42 / 0.39")
 
+tab_rank, tab_player, tab_robust, tab_rr, tab_method = st.tabs(
+    ["Rankings", "Player explorer", "Robustness", "RR fit", "Method"]
+)
+
