@@ -27,7 +27,22 @@ def load(kind: str) -> pd.DataFrame:
     df["cons_pct"] = df["cons"] * 100
     df["top10_pct"] = df["p_top10_rating"] * 100
     return df
-st.title("Who holds up when it matters?")
+FIT = {
+    "batters": {
+        "Tim David": "Death overs: 207 of 334 pressure balls at the death, +28.5/100. Closest match to RR's death gap.",
+        "Heinrich Klaasen": "Both gaps: +48 in overs 7-15 and +17 at the death. IPL-only rank 2.",
+        "Shreyas Iyer": "Overs 7-15 +31 and death +72; IPL-only rank 5. Strong IPL-validated fit.",
+        "Suryakumar Yadav": "Overs 7-15 specialist (+52/100 on 306 balls). Weaker at the death.",
+        "Yashasvi Jaiswal": "Already at RR. Powerplay +92 on 130 balls. Retain.",
+        "Abhishek Sharma": "Elite, but powerplay pressure batting is already RR's strength.",
+    },
+    "bowlers": {
+        "Sunil Narine": "Rank 1 pooled and IPL-only. Overs 7-15 +19, death +61.",
+        "Josh Hazlewood": "Only top-10 bowler strong at both ends: powerplay +50, death +61. Widest interval.",
+        "Kuldeep Yadav": "Overs 7-15 +30 on 229 balls; wickets 7.1/100 vs par 5.3.",
+        "Rashid Khan": "Largest sample (461 balls). Overs 7-15 +10, death +42.",
+    },
+}st.title("Who holds up when it matters?")
 st.caption("SupeRR Selector Season 2 · Round 1 · Most reliable players under pressure for Rajasthan Royals · IPL 2027 auction")
 
 c1, c2, c3, c4 = st.columns(4)
@@ -115,3 +130,12 @@ with tab_player:
         fig.add_bar(name="Situation par", x=lab, y=[p["sr_par"], p["out_par"]], marker_color=NAVY)
         fig.update_layout(barmode="group", title="Actual vs situation-par (own pressure balls)", height=320, margin=dict(t=50, b=10))
         st.plotly_chart(fig, width="stretch")
+    st.write(
+        f"**Rank under each variant:** pooled {int(p['rank'])} · rating only {int(p['rating_only_rank'])} · "
+        f"recency-weighted {int(p['recent_rank'])} · IPL balls only {'n/a' if pd.isna(p['ipl_only_rank']) else int(p['ipl_only_rank'])}. "
+        f"Seasons beating par: {int(p['yrs_pos'])} of {int(p['yrs_tot'])}."
+    )
+    fit = FIT["batters" if role2 == "Batters" else "bowlers"].get(name)
+    if fit:
+        st.info(f"RR fit: {fit}")
+
