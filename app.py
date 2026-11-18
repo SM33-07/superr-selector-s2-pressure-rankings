@@ -39,3 +39,26 @@ tab_rank, tab_player, tab_robust, tab_rr, tab_method = st.tabs(
     ["Rankings", "Player explorer", "Robustness", "RR fit", "Method"]
 )
 
+# ---------------------------------------------------------------- Rankings
+with tab_rank:
+    role = st.radio("Role", ["Batters", "Bowlers"], horizontal=True)
+    df = load(role.lower())
+    f1, f2, f3, f4 = st.columns([1, 1, 1, 1])
+    top_n = f1.slider("Show top N", 5, 30, 10)
+    teams = f2.multiselect("IPL 2026 team", sorted(df["team"].unique()))
+    min_balls = f3.slider("Min pressure balls", 0, int(df["p_balls"].max()), 0, step=10)
+    rank_by = f4.selectbox("Rank by", ["Composite rank (report)", "Pressure rating", "IPL-only rank", "Recent form rank"])
+
+    view = df[df["p_balls"] >= min_balls]
+    if teams:
+        view = view[view["team"].isin(teams)]
+    if rank_by == "Composite rank (report)":
+        view = view.sort_values("rank")
+    elif rank_by == "Pressure rating":
+        view = view.sort_values("pressure", ascending=False)
+    elif rank_by == "IPL-only rank":
+        view = view.dropna(subset=["ipl_only_rank"]).sort_values("ipl_only_rank")
+    else:
+        view = view.sort_values("recent_rank")
+    view = view.head(top_n).reset_index(drop=True)
+
