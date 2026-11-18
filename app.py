@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 DATA = Path(__file__).parent / "data"
-PINK, NAVY, BLUE, GREY = "#EA1B85", "#0B1033", "#254AA5", "#C9CEE0"
+PINK, NAVY, BLUE = "#EA1B85", "#0B1033", "#254AA5"
 
 st.set_page_config(page_title="Players Under Pressure | RR IPL 2027", page_icon="🏏", layout="wide")
 
@@ -20,11 +20,10 @@ h1,h2,h3 {{color:{NAVY};letter-spacing:-0.01em}}
 .hero .eyebrow {{color:{PINK};font-weight:700;font-size:.8rem;letter-spacing:.12em;text-transform:uppercase;position:relative;z-index:2}}
 .hero h1 {{color:#fff;font-size:2.6rem;margin:6px 0 8px;position:relative;z-index:2;line-height:1.1}}
 .hero p {{color:#b9bfe0;margin:0;max-width:640px;font-size:1.02rem;position:relative;z-index:2}}
-.card {{background:#F6F5FA;border-radius:16px;padding:16px 20px;border:1px solid #E8E6F2}}
+.card {{background:#F6F5FA;border-radius:16px;padding:16px 20px;border:1px solid #E8E6F2;min-height:110px;display:flex;flex-direction:column;justify-content:center}}
 .card .big {{font-size:1.9rem;font-weight:800;color:{PINK};line-height:1.1}}
 .card .lbl {{font-size:.85rem;color:#5c6385}}
 .pill {{display:inline-block;padding:2px 10px;border-radius:999px;font-size:.75rem;font-weight:700;margin-right:6px}}
-.pill.high {{background:#dff5e8;color:#14753f}}.pill.medium {{background:#fff1d6;color:#8a5a00}}.pill.low {{background:#fde0e0;color:#a12020}}
 [data-testid="stMetricValue"] {{color:{PINK}}}
 </style>""",
     unsafe_allow_html=True,
@@ -83,14 +82,23 @@ PHASE = {
 @st.cache_data
 def load(role: str) -> pd.DataFrame:
     df = pd.read_csv(DATA / f"{role}.csv")
-    df["team"] = df["ipl26"].fillna("-").replace({"-": "No 2026 squad"})
+    df["team"] = df["ipl26"].fillna("—").replace({"": "—"})
     df["cons_pct"] = df["cons"] * 100
     df["top10_pct"] = df["p_top10_rating"] * 100
     df["interval"] = df["boot_lo"].astype(int).astype(str) + "–" + df["boot_hi"].astype(int).astype(str)
-    df["confidence"] = df["top10_pct"].apply(
-        lambda value: "High" if value >= 80 else ("Medium" if value >= 50 else "Low")
-    )
     return df.sort_values("rank").reset_index(drop=True)
+
+
+def remove_pick(state_key: str, player: str) -> None:
+    st.session_state[state_key] = [
+        name for name in st.session_state[state_key] if name != player
+    ]
+
+
+def clear_picks() -> None:
+    st.session_state["pick_batters"] = []
+    st.session_state["pick_bowlers"] = []
+
 
 def card(big: str, label: str) -> str:
     return f'<div class="card"><div class="big">{big}</div><div class="lbl">{label}</div></div>'
@@ -116,30 +124,60 @@ fit = BATTER_FIT if is_batters else BOWLER_FIT
 tabs = st.tabs(["My picks", "Rankings", "Compare", "Player", "Insights", "RR fit", "Method"])
 
 with tabs[0]:
-    st.subheader(f"Final top 10 {role.lower()} under pressure")
-    show = pd.DataFrame({
-        "Rank": df["rank"],
-        "Player": df["name"],
-        "IPL 2026": df["team"],
-        "Rating": df["pressure"],
-        "90% interval": df["interval"],
-        "Consistency": df["cons_pct"].round(0).astype(int).astype(str) + "%",
-        "Pressure balls": df["p_balls"],
-        "P(top-10)": df["top10_pct"].round(0).astype(int).astype(str) + "%",
-        "Confidence": df["confidence"],
-        "Why / fit for RR": df["name"].map(fit),
-    })
-    st.dataframe(show, hide_index=True, width="stretch",
-                 column_config={"Why / fit for RR": st.column_config.TextColumn(width="large"),
-                                "Rating": st.column_config.ProgressColumn(min_value=0, max_value=50, format="%.1f")})
-    st.caption("Composite rank includes 85% pressure rating and 15% consistency. P(top-10) is the share of 40 match-level bootstrap resamples that place the player in the top 10. The 90% interval is the 5th–95th percentile.")
-    st.caption("The displayed CSV is a report-derived shortlist, not the unverifiable full eligible pool.")
+    st.subheader("Auction target board")
+    st.caption(
+        "Build a personal, session-only shortlist from the report-published top 10. "
+        "Selections are not confirmed auction picks or evidence of player availability."
+    )
+    for key in ("pick_batters", "pick_bowlers"):
+        if key not in st.session_state:
+            st.session_state[key] = []
+
+    st.button("Clear all selections", on_click=clear_picks, key="clear_picks")
+    pick_columns = st.columns(2)
+    for column, title, kind, key in (
+        (pick_columns[0], "Batting targets", "batters", "pick_batters"),
+        (pick_columns[1], "Bowling targets", "bowlers", "pick_bowlers"),
+    ):
+        options = load(kind)
+        with column:
+            st.subheader(title)
+            st.caption(f"{len(st.session_state[key])} selected")
+            st.multiselect(
+                f"Add {title.lower()}",
+                options["name"].tolist(),
+                key=key,
+                placeholder="Choose one or more players",
+            )
+            selected = options[options["name"].isin(st.session_state[key])]
+            if selected.empty:
+                st.info(f"No {title.lower()} selected yet.")
+            for _, player in selected.iterrows():
+                with st.container(border=True):
+                    heading, remove = st.columns([4, 1])
+                    heading.markdown(
+                        f"**#{int(player['rank'])} · {player['name']}**"
+                    )
+                    remove.button(
+                        "Remove",
+                        key=f"remove_{key}_{player['name']}",
+                        on_click=remove_pick,
+                        args=(key, player["name"]),
+                        use_container_width=True,
+                    )
+                    rating_metrics = st.columns(2)
+                    rating_metrics[0].metric("Rating", f"{player['pressure']:.1f}")
+                    rating_metrics[1].metric("90% interval", player["interval"])
+                    sample_metrics = st.columns(2)
+                    sample_metrics[0].metric("Consistency", f"{player['cons_pct']:.0f}%")
+                    sample_metrics[1].metric("Pressure balls", f"{int(player['p_balls'])}")
 
 with tabs[1]:
     st.subheader("Composite ranking vs raw pressure rating")
+    st.caption("The report-published top 10 is shown here; the full eligible pool is 65 batters and 76 bowlers.")
     rank_by = st.selectbox("Rank by", ["Composite rank (report)", "Pressure rating"])
     view = df.sort_values("rank" if rank_by.startswith("Composite") else "pressure",
-                          ascending=rank_by.startswith("Composite"))
+                          ascending=rank_by.startswith("Composite"), kind="stable")
     fig = go.Figure()
     fig.add_trace(go.Scatter(
         x=view["pressure"], y=view["name"], mode="markers+text", text=view["rank"].astype(str),
@@ -155,8 +193,13 @@ with tabs[1]:
                       xaxis_title="Pressure rating: runs above situation-par per 100 balls")
     st.plotly_chart(fig, width="stretch")
     st.caption("Composite rank is not the same as sorting by the raw pressure rating.")
-    out = view[["rank","name","ipl26","pressure","boot_lo","boot_hi","cons_pct","p_balls","top10_pct"]].copy()
-    out.columns = ["Rank","Player","IPL 2026","Rating","Lo (5%)","Hi (95%)","Consistency %","Pressure balls","P(top-10) %"]
+    out = view[["rank", "name", "team", "pressure", "interval", "cons_pct", "p_balls", "top10_pct"]].copy()
+    out.columns = [
+        "Rank", "Player", "IPL 2026 team", "Pressure Rating", "90% Interval",
+        "Consistency", "Pressure Balls", "P(top-10)",
+    ]
+    out["Consistency"] = out["Consistency"].round(0).astype(int).astype(str) + "%"
+    out["P(top-10)"] = out["P(top-10)"].round(0).astype(int).astype(str) + "%"
     st.dataframe(out.round(1), hide_index=True, width="stretch")
     st.download_button("Download shortlist (CSV)", out.to_csv(index=False), f"{role.lower()}_top10.csv", "text/csv")
 
@@ -189,22 +232,35 @@ with tabs[2]:
 with tabs[3]:
     name = st.selectbox("Player", df["name"].tolist())
     p = df[df["name"] == name].iloc[0]
-    st.subheader(f"{p['name']} · rank {int(p['rank'])}")
-    m = st.columns(4)
+    st.subheader(f"{p['name']} · composite rank {int(p['rank'])}")
+    m = st.columns(3)
     m[0].metric("Pressure rating", f"{p['pressure']:.1f}")
     m[1].metric("90% interval", p["interval"])
     m[2].metric("Consistency", f"{p['cons_pct']:.0f}%")
-    m[3].metric("P(top-10)", f"{p['top10_pct']:.0f}%")
+    sample_metrics = st.columns(2)
+    sample_metrics[0].metric("P(top-10)", f"{p['top10_pct']:.0f}%")
+    sample_metrics[1].metric("Pressure balls", f"{int(p['p_balls'])}")
     fig = go.Figure(go.Bar(
         x=["Powerplay","Overs 7–15","Death"], y=list(PHASE[name]),
         marker_color=[PINK,BLUE,NAVY],
     ))
     fig.update_layout(height=360, plot_bgcolor="white",
-                      yaxis_title="Pressure balls", title="Pressure balls by phase")
+                      yaxis_title="Pressure balls", title="Pressure balls by phase",
+                      margin=dict(l=10, r=10, t=55, b=20))
     st.plotly_chart(fig, width="stretch")
-    total = sum(PHASE[name])
-    st.caption(f"Phase sample: {total} pressure balls {'bowled' if not is_batters else 'faced'}; published total: {int(p['p_balls'])}.")
-    st.info(f"**RR fit:** {fit[name]}")
+    st.caption(
+        f"Phase sample: {sum(PHASE[name])} pressure balls "
+        f"{'bowled' if not is_batters else 'faced'} (total published sample: {int(p['p_balls'])})."
+    )
+    if name == "Mohsin Khan":
+        st.warning(
+            "Low-confidence ranking: Mohsin is effectively tied with Noor Ahmad "
+            "around 10th, with a small 143-ball sample and a very wide 90% interval "
+            "of approximately 0–39."
+        )
+    with st.container(border=True):
+        st.markdown("**RR squad-fit interpretation**")
+        st.write(fit[name])
 
 with tabs[4]:
     st.subheader("Robustness: top-10 players retained")
@@ -214,23 +270,44 @@ with tabs[4]:
         "Bowlers": [row[2] for row in ROBUSTNESS],
     })
     st.dataframe(robustness, hide_index=True, width="stretch")
-    st.markdown("**Repeatability**")
+    st.markdown("**Repeatability: overall level vs pressure-specific uplift**")
     repeatability = pd.DataFrame({
         "Measure": ["Overall pressure rating", "Pressure-specific uplift", "Consistency / hit rate"],
         "Batters": ["0.42", "0.05", "0.08"],
         "Bowlers": ["0.39", "0.05", "0.09"],
     })
-    st.dataframe(repeatability, hide_index=True, width="stretch")
-    st.caption("Full-sample Spearman–Brown approximate reliability: 0.60 for batters and 0.56 for bowlers.")
-    st.write("Overall pressure rating is substantially more repeatable than pressure-specific uplift.")
+    repeat_cols = st.columns([1.1, 1])
+    repeat_cols[0].dataframe(repeatability, hide_index=True, width="stretch")
+    measures = repeatability["Measure"].tolist()
+    fig = go.Figure()
+    for label, values, color in (
+        ("Batters", [0.42, 0.05, 0.08], PINK),
+        ("Bowlers", [0.39, 0.05, 0.09], NAVY),
+    ):
+        fig.add_bar(
+            name=label, x=measures, y=values, marker_color=color,
+            text=[f"{value:.2f}" for value in values], textposition="outside",
+        )
+    fig.update_layout(
+        barmode="group", height=330, yaxis=dict(range=[0, 0.5], title="Split-half correlation"),
+        margin=dict(l=10, r=10, t=20, b=80), plot_bgcolor="white",
+        legend=dict(orientation="h", y=1.12),
+    )
+    repeat_cols[1].plotly_chart(fig, width="stretch")
+    st.caption(
+        "Overall level is more repeatable than the pressure-specific uplift. "
+        "Full-sample Spearman–Brown approximate reliability: 0.60 for batters and 0.56 for bowlers."
+    )
     st.warning("Ranks 6–10 are close in uncertainty to 11–15. Composite ranking should be read with the 90% intervals.")
 
 with tabs[5]:
     st.subheader("Where RR is weak under pressure (2025–26)")
-    gaps = pd.DataFrame({
-        "Powerplay": [70,-12], "Overs 7–15": [12,-11], "Death": [-5,-6]
-    }, index=["Batting","Bowling"])
-    st.dataframe(gaps, width="stretch")
+    gaps = pd.DataFrame(
+        [["+70", "+12", "−5"], ["−12", "−11", "−6"]],
+        index=["Batting", "Bowling"],
+        columns=["Powerplay", "Overs 7–15", "Death"],
+    )
+    st.table(gaps)
     st.caption("Runs above situation-par per 100 high-pressure balls.")
     st.caption("Phase comparisons are directional and based on approximately 100 overs per side.")
     st.write("RR batting is strong in the powerplay, slightly above par in overs 7–15, and below par at the death. "
@@ -248,7 +325,7 @@ with tabs[5]:
         ("Ravindra Jadeja","+4.0","232"),("Sam Curran","+2.2","209"),
         ("Shubham Dubey","+1.8","59"),
     ], columns=["Player","Rating","Pressure balls"])
-    st.dataframe(batting_rr, hide_index=True, width="stretch")
+    st.table(batting_rr)
 
     st.markdown("**RR existing-squad bowling pressure ratings**")
     bowling_rr = pd.DataFrame([
@@ -259,7 +336,7 @@ with tabs[5]:
         ("Sam Curran","-8.4","268"),("Kwena Maphaka","-8.5","48"),
         ("Dasun Shanaka","-9.5","85"),("Nandre Burger","-11.6","90"),
     ], columns=["Player","Rating","Pressure balls"])
-    st.dataframe(bowling_rr, hide_index=True, width="stretch")
+    st.table(bowling_rr)
 
     st.markdown("**Recommended pursuit order**")
     left,right = st.columns(2)
@@ -275,43 +352,68 @@ with tabs[5]:
     st.info("Player availability is not established by this model. These are analytical pursuits, not confirmed auction availability.")
 
 with tabs[6]:
-    st.markdown("""
-**1. Pressure and Leverage Index.** High-pressure deliveries have Leverage Index (LI) ≥ 1.5.
-The Leverage Index threshold used for the main result is 1.5, with LI ≥ 1.25 and
-LI ≥ 2.0 used as robustness specifications.
+    st.subheader("How the rating is built")
+    overview = st.columns(3)
+    overview[0].metric("Deliveries", "189,555")
+    overview[1].metric("Matches", "803")
+    overview[2].metric("High-pressure deliveries", "32,615 · 18.3%")
 
-**2. Data scope.** 189,555 deliveries, 803 IPL and men's T20I matches from 2022–2026,
-and 32,615 high-pressure deliveries (18.3% of all deliveries).
+    st.markdown("**Pressure and delivery value**")
+    st.write(
+        "High pressure is Leverage Index (LI) ≥ 1.5. Delivery value is runs plus "
+        "the change in expected future runs after versus before the delivery. "
+        "Players are compared with situation-par and adjusted for opposition."
+    )
+    st.markdown("**Estimation and score**")
+    st.write(
+        "Opposition-adjusted two-block ridge regression separates baseline level "
+        "from pressure-specific uplift. Penalties were selected through cross-validation: "
+        "400 for baseline and 8,000 for uplift. Final Composite = 85% Pressure Rating "
+        "+ 15% Consistency. Consistency is the share of pressure innings or spells "
+        "beating par, shrunk using a 12-appearance prior."
+    )
+    st.markdown("**Uncertainty and repeatability**")
+    st.write(
+        "Intervals are the 5th–95th percentiles of 40 match-level bootstrap resamples. "
+        "P(top-10) is the proportion of bootstrap samples in which a player's pressure "
+        "rating ranks in the top 10; it is not a guarantee."
+    )
+    st.dataframe(
+        pd.DataFrame({
+            "Measure": ["Overall pressure rating", "Pressure-specific uplift", "Consistency / hit rate"],
+            "Batters": ["0.42", "0.05", "0.08"],
+            "Bowlers": ["0.39", "0.05", "0.09"],
+        }),
+        hide_index=True, width="stretch",
+    )
+    st.caption("Full-sample Spearman–Brown approximate reliability is 0.60 for batters and 0.56 for bowlers.")
 
-**3. Situations and value.** Delivery value uses runs plus the change in expected future
-runs after versus before each delivery. Performances are compared with situation-par
-and adjusted for opposition. A player's actual performance is estimated across the
-innings/over and pressure situation.
-
-**4. Estimation.** Opposition-adjusted two-block ridge regression separates a baseline
-level from pressure-specific uplift. The baseline penalty is 400 and the uplift
-penalty is 8,000.
-
-**5. Composite score.** 85% pressure rating plus 15% consistency. Consistency uses
-a 12-appearance prior. The 90% intervals and top-10 probabilities use 40 match-level
-bootstrap resamples.
-
-**6. Final eligibility.** Batters need at least 90 high-pressure balls faced;
-bowlers at least 60 high-pressure balls bowled. Both roles require at least 20 matches,
-at least one appearance in 2025–26, and at least 60 IPL high-pressure balls.
-The final eligible populations are 65 batters and 76 bowlers. Reeza Hendricks
-(0 IPL pressure balls) and Blessing Muzarabani (4 IPL pressure balls) are removed.
-
-**Limitations.** Venue/pitch, toss/dew, batter–bowler matchups, batting position
-beyond phase/wickets, injuries and current form, and teammate effects are not fully
-modelled. The win-probability model is state-only and does not model team strength
-or venue. First-innings expected-run valuation is applied to chases, with
-situation-cell adjustment addressing the resulting bias. Wides, no-balls and free
-hits are approximated.
-
-**Repeatability.** Pressure-specific uplift is weakly repeatable at approximately
-r = 0.05, despite stronger repeatability in the overall pressure rating.
-""")
+    st.markdown("**Final eligibility and dashboard coverage**")
+    eligibility = st.columns(2)
+    eligibility[0].markdown(
+        "- Batters: at least 90 high-pressure balls faced\n"
+        "- Bowlers: at least 60 high-pressure balls bowled\n"
+        "- Both: at least 20 matches and one 2025–26 appearance\n"
+        "- Both: at least 60 IPL high-pressure balls"
+    )
+    eligibility[1].markdown(
+        "**Final eligible population:** 65 batters and 76 bowlers.\n\n"
+        "**Dashboard data:** report-published top 10 for each role; complete "
+        "eligible-player exports are not available here.\n\n"
+        "Reeza Hendricks (0 IPL pressure balls) and Blessing Muzarabani "
+        "(4) are excluded by the IPL sample rule."
+    )
+    with st.expander("Model limitations and implementation details"):
+        st.markdown(
+            "- Venue and pitch conditions are not fully modelled.\n"
+            "- Toss and dew effects are not included.\n"
+            "- Batter–bowler matchup effects are not included.\n"
+            "- Batting position beyond phase and wicket context is not fully modelled.\n"
+            "- Injuries, current form, and teammate effects are not included.\n"
+            "- The win-probability model is state-only and does not model team strength or venue.\n"
+            "- First-innings expected-run valuation is applied to chases; situation-cell adjustment addresses the resulting bias.\n"
+            "- Wides, no-balls, and free hits are approximated."
+        )
 
 st.divider()
 st.caption("SupeRR Selector Season 2 · Final Round 1 report values. Composite ranks, not raw rating order.")

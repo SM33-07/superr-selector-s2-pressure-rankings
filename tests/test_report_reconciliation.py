@@ -93,6 +93,16 @@ class ReportReconciliationTests(unittest.TestCase):
         for name, phases in PHASE.items():
             self.assertEqual(sum(phases), totals[name], name)
 
+    def test_app_phase_profiles_match_report_values(self):
+        tree = ast.parse((ROOT / "app.py").read_text(encoding="utf-8"))
+        app_phase = next(
+            ast.literal_eval(node.value)
+            for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(isinstance(target, ast.Name) and target.id == "PHASE" for target in node.targets)
+        )
+        self.assertEqual(app_phase, PHASE)
+
     def test_excluded_players_are_not_ranked(self):
         for filename in ("batters.csv", "bowlers.csv"):
             df = pd.read_csv(ROOT / "data" / filename)
@@ -113,8 +123,10 @@ class ReportReconciliationTests(unittest.TestCase):
         self.assertEqual(normalized, expected)
         self.assertNotIn('"10/10"', source)
         self.assertNotIn('"9/10"', source[source.find("Consistency-heavy"):])
+        self.assertNotIn('"High"', source)
+        self.assertNotIn('"Medium"', source)
 
-    def test_apptest_runs_without_exceptions(self):
+    def test_apptest_selection_add_remove_clear_and_persistence(self):
         try:
             from streamlit.testing.v1 import AppTest
         except ImportError:
@@ -123,8 +135,89 @@ class ReportReconciliationTests(unittest.TestCase):
         at = AppTest.from_file(str(ROOT / "app.py")).run(timeout=20)
         self.assertFalse(at.exception)
 
+        at.multiselect(key="pick_batters").set_value(
+            ["Abhishek Sharma", "Tim David"]
+        ).run(timeout=20)
+        at.multiselect(key="pick_bowlers").set_value(
+            ["Sunil Narine", "Mohsin Khan"]
+        ).run(timeout=20)
+        self.assertEqual(
+            at.session_state["pick_batters"], ["Abhishek Sharma", "Tim David"]
+        )
+        self.assertEqual(
+            at.session_state["pick_bowlers"], ["Sunil Narine", "Mohsin Khan"]
+        )
+
         at.radio[0].set_value("Bowlers").run(timeout=20)
+        self.assertEqual(
+            at.session_state["pick_batters"], ["Abhishek Sharma", "Tim David"]
+        )
+        self.assertEqual(
+            at.session_state["pick_bowlers"], ["Sunil Narine", "Mohsin Khan"]
+        )
+
+        at.button(key="remove_pick_batters_Abhishek Sharma").click().run(timeout=20)
+        self.assertEqual(at.session_state["pick_batters"], ["Tim David"])
+        at.button(key="clear_picks").click().run(timeout=20)
+        self.assertEqual(at.session_state["pick_batters"], [])
+        self.assertEqual(at.session_state["pick_bowlers"], [])
+
+    def test_all_player_profiles_and_rr_fit_tables_render(self):
+        try:
+            from streamlit.testing.v1 import AppTest
+        except ImportError:
+            self.skipTest("Streamlit AppTest is unavailable")
+
+        at = AppTest.from_file(str(ROOT / "app.py")).run(timeout=20)
         self.assertFalse(at.exception)
+        ranking = at.dataframe[0].value
+        self.assertEqual(
+            ranking.columns.tolist(),
+            [
+                "Rank", "Player", "IPL 2026 team", "Pressure Rating",
+                "90% Interval", "Consistency", "Pressure Balls", "P(top-10)",
+            ],
+        )
+        self.assertEqual(ranking.iloc[-1]["Player"], "Andre Russell")
+        self.assertEqual(ranking.iloc[-1]["IPL 2026 team"], "—")
+        for role, expected in (("Batters", BATTER_RANKINGS), ("Bowlers", BOWLER_RANKINGS)):
+            at.radio[0].set_value(role).run(timeout=20)
+            for name, *_ in expected:
+                at.selectbox[1].set_value(name).run(timeout=20)
+                self.assertFalse(at.exception, f"{role}: {name}")
+                self.assertEqual(at.selectbox[1].value, name)
+                if name == "Mohsin Khan":
+                    self.assertTrue(any("wide 90% interval" in warning.value for warning in at.warning))
+
+        self.assertEqual([len(table.value) for table in at.table], [2, 10, 12])
+        self.assertEqual(
+            at.table[0].value.values.tolist(),
+            [["+70", "+12", "−5"], ["−12", "−11", "−6"]],
+        )
+        self.assertEqual(
+            at.table[1].value.values.tolist(),
+            [
+                ["Vaibhav Sooryavanshi", "+54.3", "82 — watch item: small sample"],
+                ["Yashasvi Jaiswal", "+22.2", "258"], ["Riyan Parag", "+14.3", "240"],
+                ["Dasun Shanaka", "+13.7", "200"], ["Donovan Ferreira", "+10.6", "58"],
+                ["Shimron Hetmyer", "+9.1", "265"], ["Dhruv Jurel", "+6.0", "227"],
+                ["Ravindra Jadeja", "+4.0", "232"], ["Sam Curran", "+2.2", "209"],
+                ["Shubham Dubey", "+1.8", "59"],
+            ],
+        )
+        self.assertEqual(
+            at.table[2].value.values.tolist(),
+            [
+                ["Ravindra Jadeja", "+11.9", "232"], ["Jofra Archer", "+8.9", "200"],
+                ["Ravi Bishnoi", "+8.3", "512"], ["Kuldeep Sen", "+1.9", "81"],
+                ["Brijesh Sharma", "+1.2", "89"], ["Sandeep Sharma", "-1.8", "200"],
+                ["Tushar Deshpande", "-2.1", "218"], ["Adam Milne", "-5.2", "96"],
+                ["Sam Curran", "-8.4", "268"], ["Kwena Maphaka", "-8.5", "48"],
+                ["Dasun Shanaka", "-9.5", "85"], ["Nandre Burger", "-11.6", "90"],
+            ],
+        )
+        self.assertEqual(len(at.dataframe), 5)
+
 
 
 if __name__ == "__main__":
