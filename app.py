@@ -2,11 +2,10 @@
 Interactive companion to the methodology report (RR, IPL 2027 auction)."""
 from pathlib import Path
 import pandas as pd
-
-DATA = Path(__file__).parent / "data"
 import plotly.graph_objects as go
 import streamlit as st
 
+DATA = Path(__file__).parent / "data"
 PINK, NAVY, BLUE = "#EA1B85", "#0B1033", "#254AA5"
 
 st.set_page_config(page_title="Players Under Pressure | RR IPL 2027", page_icon="🏏", layout="wide")
@@ -27,6 +26,8 @@ def load(kind: str) -> pd.DataFrame:
     df["cons_pct"] = df["cons"] * 100
     df["top10_pct"] = df["p_top10_rating"] * 100
     return df
+
+
 FIT = {
     "batters": {
         "Tim David": "Death overs: 207 of 334 pressure balls at the death, +28.5/100. Closest match to RR's death gap.",
@@ -42,7 +43,9 @@ FIT = {
         "Kuldeep Yadav": "Overs 7-15 +30 on 229 balls; wickets 7.1/100 vs par 5.3.",
         "Rashid Khan": "Largest sample (461 balls). Overs 7-15 +10, death +42.",
     },
-}st.title("Who holds up when it matters?")
+}
+
+st.title("Who holds up when it matters?")
 st.caption("SupeRR Selector Season 2 · Round 1 · Most reliable players under pressure for Rajasthan Royals · IPL 2027 auction")
 
 c1, c2, c3, c4 = st.columns(4)
@@ -106,6 +109,7 @@ with tab_rank:
     st.dataframe(out.round(1), hide_index=True, width="stretch")
     st.download_button("Download table (CSV)", out.to_csv(index=False), f"{role.lower()}_view.csv", "text/csv")
 
+# ---------------------------------------------------------------- Player explorer
 with tab_player:
     role2 = st.radio("Role ", ["Batters", "Bowlers"], horizontal=True, key="role2")
     d2 = load(role2.lower()).sort_values("rank")
@@ -179,3 +183,22 @@ with tab_rr:
             st.markdown(f"- **{k}**: {v}")
     st.info("Availability is unconfirmed: retention lists were due 17 Nov 2026 and the mini-auction is on 16 Dec 2026 in Goa.")
 
+# ---------------------------------------------------------------- Method
+with tab_method:
+    st.markdown(
+        """
+**1. Pressure = leverage.** For every delivery, the Leverage Index (LI) is the expected absolute change in win probability across possible outcomes, scaled so the mean is 1. High-pressure means LI ≥ 1.5 (18% of deliveries).
+
+**2. Value of a ball.** Runs scored + expected future runs after − before, so a wicket costs what it cost at that moment.
+
+**3. Compare like with like.** Two-block ridge regression: situation cell + player baseline + player pressure uplift, minus opposition terms. Shrinkage controls sample size (penalties 400 and 8,000, chosen by match-grouped cross-validation).
+
+**4. Final score.** 85% pressure rating + 15% consistency (share of pressure innings/spells beating par, shrunk to the league rate).
+
+**Key finding.** Level under pressure repeats (split-half r ≈ 0.4). The pressure-specific part does not (r ≈ 0.05). Players who do well under pressure are mostly just very good players, so ranking leans on level.
+
+**Scope.** 803 IPL and men's T20I matches (2022-26), 189,555 deliveries. Excluded: DLS matches, super overs, non-IPL/T20I games. Pakistan national-team players removed from the pool (no IPL appearances since 2009).
+
+**Not modelled.** Venue/pitch, dew, matchups, batting position beyond phase, team-mate effects.
+"""
+    )
