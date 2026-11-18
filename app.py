@@ -139,3 +139,16 @@ with tab_player:
     if fit:
         st.info(f"RR fit: {fit}")
 
+# ---------------------------------------------------------------- Robustness
+with tab_robust:
+    st.markdown("A player is more trustworthy when the **pooled rank** and the **IPL-only rank** agree. Points far above the line lean on T20I evidence.")
+    role3 = st.radio("Role  ", ["Batters", "Bowlers"], horizontal=True, key="role3")
+    d3 = load(role3.lower()).dropna(subset=["ipl_only_rank"]).query("rank <= 25")
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=[1, 40], y=[1, 40], mode="lines", line=dict(color="#c6cbe0", dash="dash"), showlegend=False))
+    fig.add_trace(go.Scatter(x=d3["rank"], y=d3["ipl_only_rank"], mode="markers+text", text=d3["name"],
+                             textposition="top center", marker=dict(color=PINK, size=10), showlegend=False,
+                             hovertemplate="%{text}<br>Pooled %{x} · IPL-only %{y}<extra></extra>"))
+    fig.update_layout(height=560, xaxis_title="Pooled rank (IPL + T20I)", yaxis_title="IPL-only rank",
+                      xaxis=dict(range=[0, 26]), yaxis=dict(range=[0, 40], autorange="reversed"), plot_bgcolor="white")
+    st.plotly_chart(fig, width="stretch")
