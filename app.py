@@ -91,3 +91,14 @@ with tab_rank:
     st.dataframe(out.round(1), hide_index=True, width="stretch")
     st.download_button("Download table (CSV)", out.to_csv(index=False), f"{role.lower()}_view.csv", "text/csv")
 
+with tab_player:
+    role2 = st.radio("Role ", ["Batters", "Bowlers"], horizontal=True, key="role2")
+    d2 = load(role2.lower()).sort_values("rank")
+    name = st.selectbox("Player", d2["name"])
+    p = d2[d2["name"] == name].iloc[0]
+    st.subheader(f"{p['name']}  ·  {p['team']}  ·  rank {int(p['rank'])}")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Pressure rating", f"{p['pressure']:.1f}", f"{p['uplift']:+.1f} uplift vs baseline")
+    m2.metric("90% interval", f"{p['boot_lo']:.0f} to {p['boot_hi']:.0f}")
+    m3.metric("Consistency", f"{p['cons_pct']:.0f}%")
+    m4.metric("P(top-10)", f"{p['top10_pct']:.0f}%")
